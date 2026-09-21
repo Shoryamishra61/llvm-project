@@ -15,7 +15,10 @@
 #include "llvm/ABI/TargetInfo.h"
 #include "llvm/ABI/FunctionInfo.h"
 #include "llvm/ABI/Types.h"
+<<<<<<< HEAD
 #include "llvm/ADT/APFloat.h"
+=======
+>>>>>>> [ABI] Add default argument/return classifiers to TargetInfo
 #include "llvm/Support/Alignment.h"
 #include "llvm/Support/Allocator.h"
 #include "gtest/gtest.h"
@@ -27,6 +30,10 @@ namespace {
 using namespace llvm;
 
 using ABIType = llvm::abi::Type;
+<<<<<<< HEAD
+=======
+using llvm::abi::ArgInfo;
+>>>>>>> [ABI] Add default argument/return classifiers to TargetInfo
 using llvm::abi::FieldInfo;
 using llvm::abi::FunctionInfo;
 using llvm::abi::RecordFlags;
@@ -34,8 +41,14 @@ using llvm::abi::StructPacking;
 using llvm::abi::TargetInfo;
 using llvm::abi::TypeBuilder;
 
+<<<<<<< HEAD
 // A minimal concrete target that re-exposes the shared, protected helpers so
 // they can be exercised directly, independent of any real target.
+=======
+// A minimal concrete target that re-exposes the shared, protected default
+// classifiers so they can be exercised directly, independent of any real
+// target.
+>>>>>>> [ABI] Add default argument/return classifiers to TargetInfo
 class TestTargetInfo : public TargetInfo {
 public:
   explicit TestTargetInfo(TypeBuilder &Builder) : TargetInfo(Builder) {}
@@ -43,7 +56,12 @@ public:
   const llvm::abi::ABICompatInfo &getABICompatInfo() const override {
     return Compat;
   }
+<<<<<<< HEAD
   using TargetInfo::isSingleElementStruct;
+=======
+  using TargetInfo::classifyDefaultArgumentType;
+  using TargetInfo::classifyDefaultReturnType;
+>>>>>>> [ABI] Add default argument/return classifiers to TargetInfo
 
 private:
   llvm::abi::ABICompatInfo Compat;
@@ -55,13 +73,20 @@ protected:
   TypeBuilder TB;
   const ABIType *I16;
   const ABIType *I32;
+<<<<<<< HEAD
   const ABIType *F32;
   /// An empty class: a record with no fields, one byte wide.
   const ABIType *Empty;
+=======
+  const ABIType *Void;
+  /// A _BitInt wider than 128 bits, which cannot be passed in registers.
+  const ABIType *WideBitInt;
+>>>>>>> [ABI] Add default argument/return classifiers to TargetInfo
 
   TargetInfoTest()
       : TB(Alloc), I16(TB.getIntegerType(16, llvm::Align(2), /*Signed=*/true)),
         I32(TB.getIntegerType(32, llvm::Align(4), /*Signed=*/true)),
+<<<<<<< HEAD
         F32(TB.getFloatType(llvm::APFloat::IEEEsingle(), llvm::Align(4))),
         Empty(TB.getRecordType({}, llvm::TypeSize::getFixed(8), llvm::Align(1),
                                /*UnadjustedAlign=*/llvm::Align(1),
@@ -142,6 +167,110 @@ TEST_F(TargetInfoTest, SingleElementStructNestedSingleElementReduces) {
 // A non-record type is never a single-element struct.
 TEST_F(TargetInfoTest, SingleElementStructNonRecordReturnsNull) {
   EXPECT_EQ(singleElement(I32), nullptr);
+=======
+        Void(TB.getVoidType()),
+        WideBitInt(TB.getIntegerType(129, llvm::Align(8), /*Signed=*/true,
+                                     /*IsBitInt=*/true)) {}
+
+  /// A record with a single int field, passable in registers.
+  const ABIType *recordInReg() {
+    return TB.getRecordType({FieldInfo(I32, 0)}, llvm::TypeSize::getFixed(32),
+                            llvm::Align(4), /*UnadjustedAlign=*/llvm::Align(4),
+                            StructPacking::Default, {}, {},
+                            RecordFlags::CanPassInRegisters);
+  }
+
+  /// The same record marked as unable to pass in registers, e.g. a non-trivial
+  /// C++ type. This takes the RAA_Indirect path.
+  const ABIType *recordInMemory() {
+    return TB.getRecordType({FieldInfo(I32, 0)}, llvm::TypeSize::getFixed(32),
+                            llvm::Align(4), /*UnadjustedAlign=*/llvm::Align(4),
+                            StructPacking::Default, {}, {}, RecordFlags::None);
+  }
+
+  ArgInfo classifyArg(const ABIType *Ty) {
+    TestTargetInfo TI(TB);
+    return TI.classifyDefaultArgumentType(Ty);
+  }
+
+  ArgInfo classifyRet(const ABIType *Ty) {
+    TestTargetInfo TI(TB);
+    return TI.classifyDefaultReturnType(Ty);
+  }
+};
+
+// --- Argument classification -------------------------------------------------
+
+// A word-sized integer is passed directly.
+TEST_F(TargetInfoTest, DefaultArgIntIsDirect) {
+  ArgInfo Info = classifyArg(I32);
+  EXPECT_TRUE(Info.isDirect());
+}
+
+// A sub-word integer is promoted.
+TEST_F(TargetInfoTest, DefaultArgSmallIntIsExtended) {
+  EXPECT_TRUE(classifyArg(I16).isExtend());
+}
+
+// A record that fits in registers is passed indirectly by value.
+TEST_F(TargetInfoTest, DefaultArgRecordInRegIsIndirectByVal) {
+  ArgInfo Info = classifyArg(recordInReg());
+  ASSERT_TRUE(Info.isIndirect());
+  EXPECT_TRUE(Info.getIndirectByVal());
+}
+
+// A record that cannot pass in registers goes indirect without ByVal.
+TEST_F(TargetInfoTest, DefaultArgRecordInMemoryIsIndirectNoByVal) {
+  ArgInfo Info = classifyArg(recordInMemory());
+  ASSERT_TRUE(Info.isIndirect());
+  EXPECT_FALSE(Info.getIndirectByVal());
+}
+
+// A _BitInt wider than 128 bits is passed indirectly.
+TEST_F(TargetInfoTest, DefaultArgWideBitIntIsIndirect) {
+  EXPECT_TRUE(classifyArg(WideBitInt).isIndirect());
+}
+
+// A transparent union is classified as its first field, so a union of one int
+// is passed directly rather than as an aggregate.
+TEST_F(TargetInfoTest, DefaultArgTransparentUnionUsesFirstField) {
+  const ABIType *U = TB.getUnionType(
+      {FieldInfo(I32, 0)}, llvm::TypeSize::getFixed(32), llvm::Align(4),
+      /*UnadjustedAlign=*/llvm::Align(4), StructPacking::Default,
+      RecordFlags::IsTransparent | RecordFlags::CanPassInRegisters);
+  EXPECT_TRUE(classifyArg(U).isDirect());
+}
+
+// --- Return classification ---------------------------------------------------
+
+// Void returns are ignored.
+TEST_F(TargetInfoTest, DefaultReturnVoidIsIgnored) {
+  EXPECT_TRUE(classifyRet(Void).isIgnore());
+}
+
+// A word-sized integer is returned directly.
+TEST_F(TargetInfoTest, DefaultReturnIntIsDirect) {
+  EXPECT_TRUE(classifyRet(I32).isDirect());
+}
+
+// A sub-word integer is promoted on return.
+TEST_F(TargetInfoTest, DefaultReturnSmallIntIsExtended) {
+  EXPECT_TRUE(classifyRet(I16).isExtend());
+}
+
+// An aggregate is returned indirectly, and returns never use ByVal.
+TEST_F(TargetInfoTest, DefaultReturnRecordIsIndirectNoByVal) {
+  ArgInfo Info = classifyRet(recordInReg());
+  ASSERT_TRUE(Info.isIndirect());
+  EXPECT_FALSE(Info.getIndirectByVal());
+}
+
+// A _BitInt wider than 128 bits is returned indirectly.
+TEST_F(TargetInfoTest, DefaultReturnWideBitIntIsIndirect) {
+  ArgInfo Info = classifyRet(WideBitInt);
+  ASSERT_TRUE(Info.isIndirect());
+  EXPECT_FALSE(Info.getIndirectByVal());
+>>>>>>> [ABI] Add default argument/return classifiers to TargetInfo
 }
 
 } // namespace

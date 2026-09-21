@@ -95,6 +95,14 @@ protected:
   /// Returns the scalar a single-element struct reduces to, else null.
   LLVM_ABI const Type *isSingleElementStruct(const Type *Ty) const;
 
+  /// Default argument classification for targets without special rules.
+  /// Aggregates are passed indirectly and small integers are promoted.
+  LLVM_ABI ArgInfo classifyDefaultArgumentType(const Type *Ty) const;
+
+  /// Default return classification for targets without special rules.
+  /// Void is ignored and aggregates are returned indirectly.
+  LLVM_ABI ArgInfo classifyDefaultReturnType(const Type *RetTy) const;
+
   /// Apply rules for classifying return types that are common to all targets.
   LLVM_ABI bool maybeCommonClassifyReturnType(FunctionInfo &FI) const;
 
