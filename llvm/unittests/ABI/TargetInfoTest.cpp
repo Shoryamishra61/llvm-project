@@ -206,18 +206,18 @@ TEST_F(TargetInfoTest, DefaultReturnSmallIntIsExtended) {
   EXPECT_TRUE(classifyRet(I16).isExtend());
 }
 
-// An aggregate is returned indirectly, and returns never use ByVal.
-TEST_F(TargetInfoTest, DefaultReturnRecordIsIndirectNoByVal) {
+// An aggregate is returned indirectly, with ByVal=true.
+TEST_F(TargetInfoTest, DefaultReturnRecordIsIndirect) {
   ArgInfo Info = classifyRet(recordInReg());
   ASSERT_TRUE(Info.isIndirect());
-  EXPECT_FALSE(Info.getIndirectByVal());
+  EXPECT_TRUE(Info.getIndirectByVal());
 }
 
 // A _BitInt wider than 128 bits is returned indirectly.
 TEST_F(TargetInfoTest, DefaultReturnWideBitIntIsIndirect) {
   ArgInfo Info = classifyRet(WideBitInt);
   ASSERT_TRUE(Info.isIndirect());
-  EXPECT_FALSE(Info.getIndirectByVal());
+  EXPECT_TRUE(Info.getIndirectByVal());
 }
 
 // --- Single-element struct reduction -----------------------------------------
