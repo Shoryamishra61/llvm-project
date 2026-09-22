@@ -6,13 +6,14 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// Tests for target-independent helpers on the TargetInfo base class. These are
+// Tests for the shared default classification in DefaultTargetInfo. These are
 // exercised through a minimal concrete target so any new shared default lands
 // here rather than in a per-target test file.
 //
 //===----------------------------------------------------------------------===//
 
 #include "llvm/ABI/TargetInfo.h"
+#include "llvm/ABI/DefaultTargetInfo.h"
 #include "llvm/ABI/FunctionInfo.h"
 #include "llvm/ABI/Types.h"
 #include "llvm/Support/Alignment.h"
@@ -27,25 +28,22 @@ using namespace llvm;
 
 using ABIType = llvm::abi::Type;
 using llvm::abi::ArgInfo;
+using llvm::abi::DefaultTargetInfo;
 using llvm::abi::FieldInfo;
 using llvm::abi::FunctionInfo;
 using llvm::abi::RecordFlags;
 using llvm::abi::StructPacking;
-using llvm::abi::TargetInfo;
 using llvm::abi::TypeBuilder;
 
-// A minimal concrete target that re-exposes the shared, protected default
-// classifiers so they can be exercised directly, independent of any real
-// target.
-class TestTargetInfo : public TargetInfo {
+// A minimal concrete target that inherits the shared default classifiers so
+// they can be exercised directly, independent of any real target. Only
+// getABICompatInfo() is left to supply.
+class TestTargetInfo : public DefaultTargetInfo {
 public:
-  explicit TestTargetInfo(TypeBuilder &Builder) : TargetInfo(Builder) {}
-  void computeInfo(FunctionInfo &) const override {}
+  explicit TestTargetInfo(TypeBuilder &Builder) : DefaultTargetInfo(Builder) {}
   const llvm::abi::ABICompatInfo &getABICompatInfo() const override {
     return Compat;
   }
-  using TargetInfo::classifyDefaultArgumentType;
-  using TargetInfo::classifyDefaultReturnType;
 
 private:
   llvm::abi::ABICompatInfo Compat;
@@ -86,12 +84,12 @@ protected:
 
   ArgInfo classifyArg(const ABIType *Ty) {
     TestTargetInfo TI(TB);
-    return TI.classifyDefaultArgumentType(Ty);
+    return TI.classifyArgumentType(Ty);
   }
 
   ArgInfo classifyRet(const ABIType *Ty) {
     TestTargetInfo TI(TB);
-    return TI.classifyDefaultReturnType(Ty);
+    return TI.classifyReturnType(Ty);
   }
 };
 
