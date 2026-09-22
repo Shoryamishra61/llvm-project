@@ -41,6 +41,10 @@ bool TargetInfo::isPromotableInteger(const IntegerType *IT) const {
   return BitWidth < 32;
 }
 
+unsigned TargetInfo::getBitIntRegThreshold() const {
+  return hasInt128Type() ? 128 : getLongLongWidth();
+}
+
 ArgInfo TargetInfo::getNaturalAlignIndirect(const Type *Ty, bool ByVal) const {
   return ArgInfo::getIndirect(Ty->getAlignment(), ByVal);
 }
@@ -126,45 +130,6 @@ const Type *TargetInfo::isSingleElementStruct(const Type *Ty) const {
     return nullptr;
 
   return Found;
-}
-
-ArgInfo TargetInfo::classifyDefaultArgumentType(const Type *Ty) const {
-  Ty = useFirstFieldIfTransparentUnion(Ty);
-
-  if (isAggregateTypeForABI(Ty)) {
-    // A record that must stay in memory keeps ByVal, everything else indirect.
-    if (RecordArgABI RAA = getRecordArgABI(Ty))
-      return getNaturalAlignIndirect(Ty, /*ByVal=*/RAA == RAA_DirectInMemory);
-    return getNaturalAlignIndirect(Ty);
-  }
-
-  if (const auto *IT = dyn_cast<IntegerType>(Ty)) {
-    // A _BitInt wider than 128 bits does not fit in registers.
-    if (IT->isBitInt() && IT->getSizeInBits().getFixedValue() > 128)
-      return getNaturalAlignIndirect(Ty);
-    if (isPromotableInteger(IT))
-      return ArgInfo::getExtend(Ty);
-  }
-
-  return ArgInfo::getDirect();
-}
-
-ArgInfo TargetInfo::classifyDefaultReturnType(const Type *RetTy) const {
-  if (RetTy->isVoid())
-    return ArgInfo::getIgnore();
-
-  if (isAggregateTypeForABI(RetTy))
-    return getNaturalAlignIndirect(RetTy);
-
-  if (const auto *IT = dyn_cast<IntegerType>(RetTy)) {
-    // A _BitInt wider than 128 bits does not fit in registers.
-    if (IT->isBitInt() && IT->getSizeInBits().getFixedValue() > 128)
-      return getNaturalAlignIndirect(RetTy);
-    if (isPromotableInteger(IT))
-      return ArgInfo::getExtend(RetTy);
-  }
-
-  return ArgInfo::getDirect();
 }
 
 bool TargetInfo::maybeCommonClassifyReturnType(FunctionInfo &FI) const {

@@ -24,8 +24,9 @@ ArgInfo DefaultTargetInfo::classifyArgumentType(const Type *Ty) const {
   }
 
   if (const auto *IT = dyn_cast<IntegerType>(Ty)) {
-    // A _BitInt wider than 128 bits does not fit in registers.
-    if (IT->isBitInt() && IT->getSizeInBits().getFixedValue() > 128)
+    // A _BitInt too wide for the largest integer register goes indirect.
+    if (IT->isBitInt() &&
+        IT->getSizeInBits().getFixedValue() > getBitIntRegThreshold())
       return getNaturalAlignIndirect(Ty);
     if (isPromotableInteger(IT))
       return ArgInfo::getExtend(Ty);
@@ -42,8 +43,9 @@ ArgInfo DefaultTargetInfo::classifyReturnType(const Type *RetTy) const {
     return getNaturalAlignIndirect(RetTy);
 
   if (const auto *IT = dyn_cast<IntegerType>(RetTy)) {
-    // A _BitInt wider than 128 bits does not fit in registers.
-    if (IT->isBitInt() && IT->getSizeInBits().getFixedValue() > 128)
+    // A _BitInt too wide for the largest integer register goes indirect.
+    if (IT->isBitInt() &&
+        IT->getSizeInBits().getFixedValue() > getBitIntRegThreshold())
       return getNaturalAlignIndirect(RetTy);
     if (isPromotableInteger(IT))
       return ArgInfo::getExtend(RetTy);
